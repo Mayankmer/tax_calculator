@@ -3,11 +3,10 @@ import { Link } from 'react-router-dom';
 
 const Header = () => {
   return (
-    <header className="flex items-center justify-between p-4 bg-white shadow-md">
+    <header className="flex items-center justify-between p-0 bg-white shadow-md">
       {/* Logo on the left */}
       <div className="flex items-center">
-        <h1>TaxEase</h1>
-        {/* <img src="/path/to/logo.png" alt="Logo" className="h-10" /> */}
+        { <img src="src\assets\TaxEase.png" alt="Logo" className="h-20 w-20" /> }
       </div>
 
       {/* Navigation links on the right */}
@@ -18,7 +17,7 @@ const Header = () => {
       </nav>
 
       {/* Login/Signup button on the extreme right */}
-      <div>
+      <div className="mr-4">
         <button className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">
           Login / Sign Up
         </button>
