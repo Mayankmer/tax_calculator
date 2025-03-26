@@ -1,0 +1,67 @@
+.history-container {
+    padding: 2rem;
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+.history-container h2 {
+    text-align: center;
+    color: #333;
+    margin-bottom: 2rem;
+}
+
+.table-container {
+    overflow-x: auto;
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    margin: 0 1rem;
+}
+
+.tax-history-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 0;
+}
+
+.tax-history-table th,
+.tax-history-table td {
+    padding: 1rem;
+    text-align: left;
+    border-bottom: 1px solid #eee;
+}
+
+.tax-history-table th {
+    background-color: #f8f9fa;
+    font-weight: 600;
+    color: #2c3e50;
+}
+
+.tax-history-table tr:hover {
+    background-color: #f8f9fa;
+}
+
+.tax-history-table td {
+    color: #2c3e50;
+}
+
+.error {
+    color: #dc3545;
+    text-align: center;
+    padding: 2rem;
+    background: #fff;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+@media (max-width: 768px) {
+    .table-container {
+        margin: 0;
+    }
+    
+    .tax-history-table th,
+    .tax-history-table td {
+        padding: 0.75rem;
+        font-size: 0.9rem;
+    }
+} 

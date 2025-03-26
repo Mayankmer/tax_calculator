@@ -1,4 +1,7 @@
 import React, { useState } from 'react';
+import Advice from './components/Advice';
+import TaxReportPDF from './components/TaxReportPDF';
+import { saveTaxCalculation } from './schemas/TaxSchema';
 
 const TaxCalculator = () => {
   const [activeTab, setActiveTab] = useState('income');
@@ -6,6 +9,8 @@ const TaxCalculator = () => {
   const [ageGroup, setAgeGroup] = useState('below60');
   const [taxResult, setTaxResult] = useState(null);
   const [showComparison, setShowComparison] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState(null);
 
   // Income Details State
   const [incomeData, setIncomeData] = useState({
@@ -84,46 +89,86 @@ const TaxCalculator = () => {
       remaining -= slabAmount;
     });
 
-
     //rebate 
     if (taxableIncome <= 1200000) {
       tax = 0;
     }
 
-    return tax * 1.04; 
-     // Add 4% cess
+    return tax * 1.04; // Add 4% cess
   };
 
-  const calculateTax = () => {
-    const totalIncome = Object.values(incomeData).reduce((sum, val) => sum + val, 0);
-    
-    // Automatic standard deduction for old regime (₹50,000 if salaried)
-    const oldStandardDeduction = incomeData.salaryIncome > 0 ? 50000 : 0;
-    const oldDeductions = oldStandardDeduction + Object.values(deductionData).reduce((sum, val) => sum + val, 0);
-    
-    const newDeductions = 75000;
+  const calculateTax = async () => {
+    try {
+      setSaving(true);
+      setError(null);
 
-    const oldTaxable = Math.max(0, totalIncome - oldDeductions);
-    const newTaxable = Math.max(0, totalIncome - newDeductions);
-
-    const oldTax = calculateOldRegimeTax(oldTaxable);
-    const newTax = calculateNewRegimeTax(newTaxable);
-
-    setTaxResult({
-      oldRegime: {
-        totalIncome,
-        deductions: oldDeductions,
-        taxableIncome: oldTaxable,
-        tax: Math.round(oldTax)
-      },
-      newRegime: {
-        totalIncome,
-        deductions: newDeductions,
-        taxableIncome: newTaxable,
-        tax: Math.round(newTax)
+      // Get user from localStorage
+      const user = JSON.parse(localStorage.getItem('user'));
+      if (!user || !user._id) {
+        throw new Error('User not authenticated. Please login again.');
       }
-    });
-    setShowComparison(false);
+
+      const totalIncome = Object.values(incomeData).reduce((sum, val) => sum + val, 0);
+      
+      // Automatic standard deduction for old regime (₹50,000 if salaried)
+      const oldStandardDeduction = incomeData.salaryIncome > 0 ? 50000 : 0;
+      const oldDeductions = oldStandardDeduction + Object.values(deductionData).reduce((sum, val) => sum + val, 0);
+      
+      const newDeductions = 75000;
+
+      const oldTaxable = Math.max(0, totalIncome - oldDeductions);
+      const newTaxable = Math.max(0, totalIncome - newDeductions);
+
+      const oldTax = calculateOldRegimeTax(oldTaxable);
+      const newTax = calculateNewRegimeTax(newTaxable);
+
+      const result = {
+        oldRegime: {
+          totalIncome,
+          deductions: oldDeductions,
+          taxableIncome: oldTaxable,
+          tax: Math.round(oldTax)
+        },
+        newRegime: {
+          totalIncome,
+          deductions: newDeductions,
+          taxableIncome: newTaxable,
+          tax: Math.round(newTax)
+        }
+      };
+
+      setTaxResult(result);
+      setShowComparison(false);
+
+      // Prepare data for MongoDB with the user's ObjectId
+      const taxData = {
+        userId: user._id, // MongoDB ObjectId from the logged-in user
+        ageGroup,
+        selectedRegime: regime,
+        incomeData,
+        deductionData,
+        taxResult: result,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      };
+
+      // Save to MongoDB
+      const savedCalculation = await saveTaxCalculation(taxData);
+      console.log('Tax calculation saved:', savedCalculation);
+
+    } catch (err) {
+      setError(err.message || 'Error saving tax calculation');
+      console.error('Error:', err);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const formatCurrency = (amount) => {
+    return new Intl.NumberFormat('en-IN', {
+        style: 'currency',
+        currency: 'INR'
+    }).format(amount || 0);
   };
 
   return (
@@ -279,17 +324,24 @@ const TaxCalculator = () => {
 
         <button 
           onClick={calculateTax}
-          className="bg-green-500 text-white px-6 py-3 w-full hover:bg-green-600"
+          disabled={saving}
+          className={`bg-green-500 text-white px-6 py-3 w-full hover:bg-green-600 ${saving ? 'opacity-50 cursor-not-allowed' : ''}`}
         >
-          Calculate Tax
+          {saving ? 'Calculating...' : 'Calculate Tax'}
         </button>
+
+        {error && (
+          <div className="mt-4 p-4 bg-red-100 text-red-700 rounded">
+            {error}
+          </div>
+        )}
 
         {/* Results Section */}
         {taxResult && (
           <div className="mt-8">
             <div className="mb-4 p-4 bg-blue-50 rounded">
               <h3 className="text-lg font-semibold">
-                {regime === 'old' ? 'Old' : 'New'} Regime Tax: ₹{taxResult[`${regime}Regime`].tax.toLocaleString()}
+                {regime === 'old' ? 'Old' : 'New'} Regime Tax: {formatCurrency(taxResult[`${regime}Regime`].tax)}
               </h3>
               <button
                 onClick={() => setShowComparison(!showComparison)}
@@ -300,50 +352,37 @@ const TaxCalculator = () => {
             </div>
 
             {showComparison && (
-              <div className="mt-4">
-                <table className="w-full border-collapse">
-                  <thead>
-                    <tr className="bg-gray-100">
-                      <th className="p-2 border">Parameter</th>
-                      <th className="p-2 border">Old Regime</th>
-                      <th className="p-2 border">New Regime</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr>
-                      <td className="p-2 border">Total Income</td>
-                      <td className="p-2 border">₹{taxResult.oldRegime.totalIncome.toLocaleString()}</td>
-                      <td className="p-2 border">₹{taxResult.newRegime.totalIncome.toLocaleString()}</td>
-                    </tr>
-                    <tr>
-                      <td className="p-2 border">Total Deductions</td>
-                      <td className="p-2 border">₹{taxResult.oldRegime.deductions.toLocaleString()}</td>
-                      <td className="p-2 border">₹{taxResult.newRegime.deductions.toLocaleString()}</td>
-                    </tr>
-                    <tr>
-                      <td className="p-2 border">Taxable Income</td>
-                      <td className="p-2 border">₹{taxResult.oldRegime.taxableIncome.toLocaleString()}</td>
-                      <td className="p-2 border">₹{taxResult.newRegime.taxableIncome.toLocaleString()}</td>
-                    </tr>
-                    <tr className="bg-yellow-50">
-                      <td className="p-2 border font-bold">Tax Payable</td>
-                      <td className="p-2 border">₹{taxResult.oldRegime.tax.toLocaleString()}</td>
-                      <td className="p-2 border">₹{taxResult.newRegime.tax.toLocaleString()}</td>
-                    </tr>
-                  </tbody>
-                </table>
-
-                <div className="mt-4 p-3 bg-blue-100 rounded">
-                  <p className="font-semibold">
-                    {taxResult.oldRegime.tax < taxResult.newRegime.tax
-                      ? "Old Regime is more beneficial by ₹" +
-                        Math.abs(taxResult.oldRegime.tax - taxResult.newRegime.tax).toLocaleString()
-                      : "New Regime is more beneficial by ₹" +
-                        Math.abs(taxResult.oldRegime.tax - taxResult.newRegime.tax).toLocaleString()}
-                  </p>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="p-4 bg-gray-50 rounded">
+                  <h4 className="font-semibold mb-2">Old Regime</h4>
+                  <p>Total Income: {formatCurrency(taxResult.oldRegime.totalIncome)}</p>
+                  <p>Deductions: {formatCurrency(taxResult.oldRegime.deductions)}</p>
+                  <p>Taxable Income: {formatCurrency(taxResult.oldRegime.taxableIncome)}</p>
+                  <p>Tax: {formatCurrency(taxResult.oldRegime.tax)}</p>
+                </div>
+                <div className="p-4 bg-gray-50 rounded">
+                  <h4 className="font-semibold mb-2">New Regime</h4>
+                  <p>Total Income: {formatCurrency(taxResult.newRegime.totalIncome)}</p>
+                  <p>Deductions: {formatCurrency(taxResult.newRegime.deductions)}</p>
+                  <p>Taxable Income: {formatCurrency(taxResult.newRegime.taxableIncome)}</p>
+                  <p>Tax: {formatCurrency(taxResult.newRegime.tax)}</p>
                 </div>
               </div>
             )}
+
+            {/* Add Advice Component */}
+            <Advice taxResult={taxResult} regime={regime} ageGroup={ageGroup} />
+
+            {/* Add PDF Download Button */}
+            <div className="mt-4 flex justify-end">
+              <TaxReportPDF 
+                taxResult={taxResult} 
+                regime={regime} 
+                ageGroup={ageGroup}
+                incomeData={incomeData}
+                deductionData={deductionData}
+              />
+            </div>
           </div>
         )}
 
